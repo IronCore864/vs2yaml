@@ -41,7 +41,7 @@ func main() {
 	client.SetToken(conf.Token)
 
 	c := client.Logical()
-	secrets, err := c.List("azdir-preprod/")
+	secrets, err := c.List(fmt.Sprintf("%s/", conf.VaultSecretPath))
 	if err != nil {
 		fmt.Println(err)
 		return
