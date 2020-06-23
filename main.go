@@ -109,5 +109,5 @@ func main() {
 			}
 		}
 	}
-	log.Println("Create/update k8s secrets done!...")
+	log.Println("Create k8s secrets yaml done!...")
 }
