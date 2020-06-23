@@ -30,18 +30,12 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	// kv v1 vs v2
-	listSecretPath := ""
-	readSecretPath := ""
-	if conf.KvVersion == 1 {
-		listSecretPath = fmt.Sprintf("%s/", conf.VaultSecretPath)
-		readSecretPath = fmt.Sprintf("%s", conf.VaultSecretPath)
-	} else {
-		listSecretPath = fmt.Sprintf("%s/metadata/", conf.VaultSecretPath)
-		readSecretPath = fmt.Sprintf("%s/data", conf.VaultSecretPath)
-	}
+	// kv v2 only
+	listSecretPath := fmt.Sprintf("%s/metadata/", conf.VaultSecretPath)
+	readSecretPath := fmt.Sprintf("%s/data", conf.VaultSecretPath)
 
 	// vault client
+	log.Println("Creating vault client ...")
 	vaultClient, err := api.NewClient(&api.Config{
 		Address: conf.VaultAddr,
 	})
@@ -55,6 +49,7 @@ func main() {
 		"role_id":   conf.RoleID,
 		"secret_id": conf.SecretID,
 	}
+	log.Println("App role auth ...")
 	resp, err := c.Write("auth/approle/login", data)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -65,27 +60,31 @@ func main() {
 		return
 	}
 	// set token after AppRole auth
+	log.Println("App role auth succeeded, set token ...")
 	vaultClient.SetToken(resp.Auth.ClientToken)
 
 	// list vault secrets
+	log.Println("Listing all secrets from vault ...")
 	secrets, err := c.List(listSecretPath)
 	if err != nil {
 		log.Fatal(err.Error())
 		return
 	}
-
+	// iterate all vault secrets, generate k8s secret, and upcert
+	log.Println("Starting to create k8s secrets yaml files ...")
 	switch x := secrets.Data["keys"].(type) {
 	case []interface{}:
 		for _, k := range x {
 			secretName := fmt.Sprintf("%v", k)
+			log.Printf("Processing secret %s ...\n", secretName)
 			secret, err := c.Read(fmt.Sprintf("%s/%s", readSecretPath, secretName))
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
 
-			data := secret.Data
-			for k, v := range data {
+			data := make(map[string]interface{})
+			for k, v := range secret.Data["data"].(map[string]interface{}) {
 				value := fmt.Sprintf("%v", v)
 				data[k] = base64.StdEncoding.EncodeToString([]byte(value))
 			}
@@ -110,4 +109,5 @@ func main() {
 			}
 		}
 	}
+	log.Println("Create/update k8s secrets done!...")
 }
